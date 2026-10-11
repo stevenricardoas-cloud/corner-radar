@@ -188,19 +188,19 @@ async function loadData(){
     const live=await apiGet('/fixtures?live=all');$('live').textContent=live.length;
     const ok=live.filter(f=>['1H','2H'].includes(f.fixture.status.short)&&f.fixture.status.elapsed>=S.minMin&&f.fixture.status.elapsed<=S.maxMin);
     ok.sort((a,b)=>((snaps[a.fixture.id]?0:1)-(snaps[b.fixture.id]?0:1))||Math.abs(a.fixture.status.elapsed-65)-Math.abs(b.fixture.status.elapsed-65));
-    const sel=ok.slice(0,S.maxM),res=[];
+    const sel=ok.slice(0,S.maxM*2),res=[];let sinSt=0,errs=0,lastErr='';
     let i=0;
     for(const f of sel){
-      msg(`Analizando ${++i}/${sel.length}…`);
+      if(res.length>=S.maxM)break;msg(`Buscando estadísticas… ${++i}/${sel.length} (${res.length} listos)`);
       try{
         const st=await apiGet('/fixtures/statistics?fixture='+f.fixture.id);
-        if(st.length<2)continue;
+        if(st.length<2){sinSt++;continue}
         const sh=(st.find(s=>s.team.id===f.teams.home.id)||{}).statistics,sa=(st.find(s=>s.team.id===f.teams.away.id)||{}).statistics;
-        if(!sh||!sa)continue;
+        if(!sh||!sa){sinSt++;continue}
         const a=analyze(f,sh,sa);
         if(S.odds){try{a.offers=parseOdds(await apiGet('/odds/live?fixture='+f.fixture.id))}catch(e){}}
         a.best=bestOffer(a);res.push(a);
-      }catch(e){console.warn(e)}
+      }catch(e){errs++;lastErr=e.message;console.warn(e)}
     }
     const liveIds=new Set(live.map(f=>f.fixture.id));
     for(const k in snaps)if(!liveIds.has(+k)&&Date.now()-snaps[k][snaps[k].length-1].t>6*36e5)delete snaps[k];
@@ -208,7 +208,7 @@ async function loadData(){
     res.sort((a,b)=>((b.best?b.best.ev:-9)-(a.best?a.best.ev:-9))||b.lam-a.lam);
     cache=res;$('nval').textContent=res.filter(a=>a.best&&a.best.ev>=S.edge/100).length;
     $('upd').textContent=new Date().toLocaleTimeString();
-    render();msg(sel.length?`Listo · ${res.length} partidos analizados`:'Ningún partido en la ventana de minutos elegida');
+    render();msg(sel.length?`Listo · ${res.length} analizados · ${sinSt} sin estadísticas en la API`+(errs?` · ${errs} errores (${lastErr})`:''):'Ningún partido en la ventana de minutos elegida');
   }catch(e){msg('Error: '+e.message);console.error(e)}
   busy=false;
 }
