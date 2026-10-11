@@ -152,7 +152,7 @@ function analyze(f,sh,sa){
   const a={id,m,T,cH,cA,gh,ga,lam,raw,full,rec,cal,shots,
     home:f.teams.home.name,away:f.teams.away.name,league:f.league.name,offers:[]};
   if(m>=S.minMin&&m<=S.maxMin&&!preds.some(p=>p.fid===id&&Math.abs(p.m-m)<10)){
-    preds.push({fid:id,m,T,raw,lam,p:[1,2,3].map(j=>pAtLeast(j,lam)),res:null,match:a.home+' vs '+a.away});
+    const g=n=>[gs(sh,n),gs(sa,n)];preds.push({fid:id,m,T,raw,lam,p:[1,2,3].map(j=>pAtLeast(j,lam)),res:null,match:a.home+' vs '+a.away,lg:a.league,gd:[gh,ga],x:{c:g('Corner Kicks'),sh:g('Total Shots'),so:g('Shots on Goal'),bl:g('Blocked Shots'),ib:g('Shots insidebox'),sv:g('Goalkeeper Saves'),fo:g('Fouls'),of:g('Offsides'),yc:g('Yellow Cards'),rc:g('Red Cards'),po:g('Ball Possession'),rec:rec,full:full}});
     if(preds.length>2000)preds.shift();
   }
   return a;
