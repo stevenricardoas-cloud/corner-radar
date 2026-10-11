@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Corner Radar · Valor en córners</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2332;--ac:#00d4aa;--red:#ff6b6b;--tx:#e7ecf3;--mu:#8b9bb4;--bd:#2a3548;--mid:#ffd166}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding:16px;min-height:100vh}
+.c{max-width:1100px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+h1{font-size:1.5rem}h1 span{color:var(--ac)}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+label{font-size:.78rem;color:var(--mu);display:flex;flex-direction:column;gap:3px}
+input,select{background:#0f1419;border:1px solid var(--bd);color:var(--tx);padding:7px 9px;border-radius:6px;font-size:.88rem;width:84px}
+input[type=password]{width:210px}input[type=checkbox]{width:auto}
+button{background:var(--ac);color:#0f1419;border:0;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer}
+button.s{background:var(--bd);color:var(--tx)}
+.st-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px}
+.st{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px;text-align:center}
+.st .n{font-size:1.3rem;font-weight:700;color:var(--ac)}.st .l{font-size:.75rem;color:var(--mu);margin-top:2px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tabs button{background:var(--card);color:var(--mu);border:1px solid var(--bd)}
+.tabs button.on{background:var(--ac);color:#0f1419}
+.sec{display:none}.sec.on{display:block}
+#msg{font-size:.85rem;color:var(--mu);margin-bottom:10px}
+.mc{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.mc.val{border-color:var(--ac)}
+.mc h3{font-size:1.02rem;margin-bottom:4px}
+.meta{font-size:.82rem;color:var(--mu);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th,td{padding:5px 6px;text-align:left;border-bottom:1px solid var(--bd)}th{color:var(--mu);font-weight:500}
+.won,.pos{color:var(--ac)}.lost,.neg{color:var(--red)}.open{color:var(--mid)}
+.tag{display:inline-block;padding:3px 9px;border-radius:12px;font-size:.78rem;font-weight:600;background:rgba(0,212,170,.15);color:var(--ac);border:1px solid var(--ac)}
+.tag.w{background:rgba(255,209,102,.12);color:var(--mid);border-color:var(--mid)}
+.man{margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.note{font-size:.8rem;color:var(--mu);margin-top:8px;line-height:1.45}
+.warn{color:var(--mid)}
+.scroll{overflow-x:auto}
+footer{margin-top:24px;text-align:center;font-size:.78rem;color:var(--mu)}
+</style></head><body><div class="c">
+<header>
+  <h1>Corner <span>Radar</span></h1>
+  <div class="row">
+    <input type="password" id="apiKey" placeholder="x-apisports-key" autocomplete="off">
+    <button onclick="saveKey()">Guardar</button>
+    <button onclick="loadData()">Actualizar</button>
+    <button class="s" onclick="settle()">Liquidar</button>
+  </div>
+</header>
+<details class="box"><summary style="cursor:pointer;color:var(--mu)">Ajustes</summary>
+ <div class="row" style="margin-top:10px">
+  <label>Córners/partido<input id="avg" type="number" step="0.1"></label>
+  <label>Edge mín. %<input id="edge" type="number"></label>
+  <label>Bankroll inicial<input id="bank" type="number"></label>
+  <label>Máx. partidos<input id="maxM" type="number"></label>
+  <label>Minuto desde<input id="minMin" type="number"></label>
+  <label>Minuto hasta<input id="maxMin" type="number"></label>
+  <label>Pausa req (s)<input id="gap" type="number" step="0.5"></label>
+  <label>Auto (min)<select id="auto"><option>0</option><option>3</option><option>5</option><option>10</option></select></label>
+  <label>Cuotas API<input id="odds" type="checkbox"></label>
+  <button class="s" onclick="readSet();msg('Ajustes guardados')">Aplicar</button>
+ </div>
+ <div class="note">Plan gratis: 100 req/día y 10/min. Cada partido gasta 1 req (2 con cuotas API). La pausa evita el límite por minuto.</div>
+</details>
+<div class="st-bar">
+  <div class="st"><div class="n" id="live">—</div><div class="l">En vivo</div></div>
+  <div class="st"><div class="n" id="nval">—</div><div class="l">Con valor</div></div>
+  <div class="st"><div class="n" id="reqs">—</div><div class="l">Requests</div></div>
+  <div class="st"><div class="n" id="upd">—</div><div class="l">Actualizado</div></div>
+</div>
+<div id="msg">Introduce tu API key y pulsa Actualizar.</div>
+<div class="tabs"><button class="on" onclick="tab(0,this)">En vivo</button><button onclick="tab(1,this)">Apuestas</button><button onclick="tab(2,this)">Modelo</button></div>
+
+<div class="sec on" id="s0"><div id="matches"><div class="box note">Sin datos todavía.</div></div></div>
+
+<div class="sec" id="s1">
+  <div class="st-bar" id="bsum"></div>
+  <div class="box scroll"><table><thead><tr><th>Partido</th><th>Apuesta</th><th>Min (córn.)</th><th>Stake</th><th>EV</th><th>Resultado</th><th></th></tr></thead><tbody id="btab"></tbody></table></div>
+  <div class="row"><button class="s" onclick="exp()">Exportar datos (JSON)</button></div>
+</div>
+
+<div class="sec" id="s2"><div class="box" id="model"></div></div>
+
+<footer>Herramienta de análisis, no consejo de apuestas. Ninguna señal garantiza ganancias.</footer>
+</div>
+<script>
+const BASE='https://v3.football.api-sports.io',$=id=>document.getElementById(id);
+const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
+const sv=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let apiKey=localStorage.getItem('apiFootballKey')||'';
+let S=Object.assign({avg:10,edge:5,bank:100,maxM:5,minMin:25,maxMin:85,gap:6.5,auto:0,odds:false},ld('cr_set',{}));
+let bets=ld('cr_bets',[]),preds=ld('cr_preds',[]),snaps=ld('cr_snap',{}),req=ld('cr_req',{d:'',n:0});
+let cache=[],inputs={},timer=null,busy=false,lastT=0;
+$('apiKey').value=apiKey;
+
+function msg(t){$('msg').textContent=t}
+function tab(i,b){document.querySelectorAll('.sec').forEach((e,j)=>e.classList.toggle('on',i===j));document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');if(i===1)renderBets();if(i===2)renderModel()}
+function saveKey(){apiKey=$('apiKey').value.trim();if(apiKey){localStorage.setItem('apiFootballKey',apiKey);msg('Key guardada. Pulsa Actualizar.')}}
+function writeSet(){for(const k in S){const e=$(k);if(!e)continue;if(e.type==='checkbox')e.checked=S[k];else e.value=S[k]}}
+function readSet(){for(const k in S){const e=$(k);if(!e)continue;S[k]=e.type==='checkbox'?e.checked:Number(e.value)}sv('cr_set',S);clearInterval(timer);if(S.auto>0)timer=setInterval(loadData,S.auto*60000)}
+writeSet();readSet();
+
+async function apiGet(ep){
+  const w=lastT+S.gap*1000-Date.now();if(w>0)await sleep(w);lastT=Date.now();
+  const d=new Date().toISOString().slice(0,10);if(req.d!==d)req={d,n:0};req.n++;sv('cr_req',req);$('reqs').textContent=req.n;
+  const r=await fetch(BASE+ep,{headers:{'x-apisports-key':apiKey}});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const j=await r.json();
+  if(j.errors&&Object.keys(j.errors).length)throw new Error(JSON.stringify(j.errors));
+  const rem=r.headers.get('x-ratelimit-requests-remaining');if(rem!==null)$('reqs').textContent=rem+' rest.';
+  return j.response||[];
+}
+// "55%" -> 55 (el original daba NaN y la posesión quedaba siempre en 50)
+const gs=(st,t)=>{const s=(st||[]).find(x=>x.type===t);return s&&s.value!=null?(parseFloat(String(s.value))||0):0};
+
+// Binomial negativa (varianza = 1.25 x media): córners están algo sobredispersos
+function pAtLeast(k,lam){
+  if(k<=0)return 1;if(lam<=1e-9)return 0;
+  const r=lam/.25,p=r/(r+lam);let pm=Math.pow(p,r),cdf=0;
+  for(let i=0;i<k;i++){cdf+=pm;pm*=(i+r)/(i+1)*(1-p)}
+  return Math.min(1,Math.max(0,1-cdf));
+}
+const pSide=(side,line,T,lam)=>{const po=pAtLeast(Math.floor(line)+1-T,lam);return side==='over'?po:1-po};
+function calib(){
+  const d=preds.filter(p=>p.res!=null&&p.res>=0);
+  if(d.length<30)return{f:1,n:d.length};
+  const a=d.reduce((s,p)=>s+p.res,0),b=d.reduce((s,p)=>s+p.raw,0);
+  return{f:Math.min(1.3,Math.max(.7,a/b)),n:d.length};
+}
+const bank=()=>S.bank+bets.reduce((s,b)=>s+(b.pl||0),0);
+function kelly(p,o){const f=(p*o-1)/(o-1);return f>0?Math.round(bank()*Math.min(.03,.25*f)*100)/100:0}
+
+function analyze(f,sh,sa){
+  const id=f.fixture.id,m=f.fixture.status.elapsed||0,gh=f.goals.home??0,ga=f.goals.away??0;
+  const cH=gs(sh,'Corner Kicks'),cA=gs(sa,'Corner Kicks'),T=cH+cA;
+  const shots=gs(sh,'Total Shots')+gs(sa,'Total Shots');
+  const arr=snaps[id]=snaps[id]||[];
+  if(!arr.length||arr[arr.length-1].m!==m)arr.push({m,c:T,t:Date.now()});
+  if(arr.length>40)arr.shift();
+  const base=S.avg/93,full=T/Math.max(m,1);
+  const old=arr.find(x=>x.m>=m-15&&m-x.m>=6);
+  const rec=old?(T-old.c)/(m-old.m):null;
+  const own=rec!=null?.6*full+.4*rec:full;
+  const w=m/(m+30),rate=w*own+(1-w)*base;
+  let mult=1+Math.max(-.1,Math.min(.15,.15*(shots/Math.max(m,1)/.27-1)));
+  const ad=Math.abs(gh-ga);
+  if(m>=60&&ad>=1&&ad<=2)mult*=1.08;else if(ad>=3)mult*=.9;else if(ad===0&&m>=60)mult*=1.03;
+  if(m>=75)mult*=1.08;
+  const raw=rate*mult*Math.max(0,93-m),cal=calib(),lam=raw*cal.f;
+  const a={id,m,T,cH,cA,gh,ga,lam,raw,full,rec,cal,shots,
+    home:f.teams.home.name,away:f.teams.away.name,league:f.league.name,offers:[]};
+  if(m>=S.minMin&&m<=S.maxMin&&!preds.some(p=>p.fid===id&&Math.abs(p.m-m)<10)){
+    preds.push({fid:id,m,T,raw,lam,p:[1,2,3].map(j=>pAtLeast(j,lam)),res:null,match:a.home+' vs '+a.away});
+    if(preds.length>2000)preds.shift();
+  }
+  return a;
+}
+function parseOdds(resp){
+  const out=[],bk=(resp[0]&&resp[0].odds)||[];
+  for(const b of bk){
+    const n=b.name||'';
+    if(!/corner/i.test(n)||!/(over|under|total)/i.test(n)||/home|away|team|race|1st|2nd|half|handicap|odd\b|even|first|last|exact/i.test(n))continue;
+    for(const v of b.values||[]){
+      const side=/over/i.test(v.value)?'over':/under/i.test(v.value)?'under':null;if(!side||v.suspended)continue;
+      const line=parseFloat(v.handicap!=null?v.handicap:String(v.value).replace(/[^\d.]/g,'')),odd=parseFloat(v.odd);
+      if(isFinite(line)&&isFinite(odd))out.push({side,line,odd});
+    }
+  }
+  return out;
+}
+function bestOffer(a){
+  let best=null;
+  for(const o of a.offers){
+    const p=pSide(o.side,o.line,a.T,a.lam);
+    if(p<.25||p>.85||o.odd<1.4||o.odd>3.5)continue;  // evita colas donde el modelo es menos fiable
+    const ev=p*o.odd-1;if(!best||ev>best.ev)best={...o,p,ev};
+  }
+  return best;
+}
+
+async function loadData(){
+  if(busy)return;readSet();
+  if(!apiKey){msg('Falta la API key (dashboard.api-football.com)');return}
+  busy=true;msg('Cargando partidos en vivo…');
+  try{
+    const live=await apiGet('/fixtures?live=all');$('live').textContent=live.length;
+    const ok=live.filter(f=>['1H','2H'].includes(f.fixture.status.short)&&f.fixture.status.elapsed>=S.minMin&&f.fixture.status.elapsed<=S.maxMin);
+    ok.sort((a,b)=>((snaps[a.fixture.id]?0:1)-(snaps[b.fixture.id]?0:1))||Math.abs(a.fixture.status.elapsed-65)-Math.abs(b.fixture.status.elapsed-65));
+    const sel=ok.slice(0,S.maxM),res=[];
+    let i=0;
+    for(const f of sel){
+      msg(`Analizando ${++i}/${sel.length}…`);
+      try{
+        const st=await apiGet('/fixtures/statistics?fixture='+f.fixture.id);
+        if(st.length<2)continue;
+        const sh=(st.find(s=>s.team.id===f.teams.home.id)||{}).statistics,sa=(st.find(s=>s.team.id===f.teams.away.id)||{}).statistics;
+        if(!sh||!sa)continue;
+        const a=analyze(f,sh,sa);
+        if(S.odds){try{a.offers=parseOdds(await apiGet('/odds/live?fixture='+f.fixture.id))}catch(e){}}
+        a.best=bestOffer(a);res.push(a);
+      }catch(e){console.warn(e)}
+    }
+    const liveIds=new Set(live.map(f=>f.fixture.id));
+    for(const k in snaps)if(!liveIds.has(+k)&&Date.now()-snaps[k][snaps[k].length-1].t>6*36e5)delete snaps[k];
+    sv('cr_snap',snaps);sv('cr_preds',preds);
+    res.sort((a,b)=>((b.best?b.best.ev:-9)-(a.best?a.best.ev:-9))||b.lam-a.lam);
+    cache=res;$('nval').textContent=res.filter(a=>a.best&&a.best.ev>=S.edge/100).length;
+    $('upd').textContent=new Date().toLocaleTimeString();
+    render();msg(sel.length?`Listo · ${res.length} partidos analizados`:'Ningún partido en la ventana de minutos elegida');
+  }catch(e){msg('Error: '+e.message);console.error(e)}
+  busy=false;
+}
+function getIn(a){
+  const d=inputs[a.id]=inputs[a.id]||{};
+  if(d.line==null)d.line=a.T+Math.max(1,Math.round(a.lam))-.5;
+  if(!d.side)d.side='over';return d;
+}
+function render(){
+  $('matches').innerHTML=cache.map(a=>{
+    const rows=[1,2,3,4].map(j=>{const p=pAtLeast(j,a.lam),pu=1-p,me=1+S.edge/100;
+      return `<tr><td>${a.T+j-.5}</td><td>${(p*100).toFixed(0)}%</td><td>${(1/p).toFixed(2)}</td><td>${(me/p).toFixed(2)}</td><td>${(me/pu).toFixed(2)}</td></tr>`}).join('');
+    const b=a.best,val=b&&b.ev>=S.edge/100,sus=b&&b.ev>.25;
+    const api=b?`<div style="margin:8px 0"><span class="tag ${sus?'w':''}">${val?'VALOR':'Mejor cuota API'}: ${b.side==='over'?'Más':'Menos'} ${b.line} @${b.odd} · EV ${(b.ev*100).toFixed(1)}%</span>${sus?' <span class="warn">EV muy alto: sospecha de error del modelo o línea desfasada.</span>':''}</div>`:(S.odds?'<div class="note">Sin cuotas de córners en la API para este partido.</div>':'');
+    const d=getIn(a);
+    return `<div class="mc ${val&&!sus?'val':''}"><h3>${esc(a.home)} vs ${esc(a.away)}</h3>
+    <div class="meta"><b style="color:var(--tx)">${a.gh}-${a.ga}</b><span>${a.m}'</span><span>${esc(a.league)}</span><span>Córners ${a.cH}-${a.cA} (${a.T})</span></div>
+    <div class="meta"><span>Esperados restantes: <b style="color:var(--tx)">${a.lam.toFixed(2)}</b></span><span>Ritmo: ${(a.full*90).toFixed(1)}/90'</span><span>Reciente: ${a.rec!=null?(a.rec*90).toFixed(1)+'/90\'':'—'}</span><span>Calibración ×${a.cal.f.toFixed(2)}</span></div>
+    ${api}
+    <div class="scroll"><table><thead><tr><th>Línea Más de</th><th>P(Más)</th><th>Cuota justa</th><th>Mín. Más</th><th>Mín. Menos</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="note">Apuesta solo si tu casa paga igual o más que la cuota mínima.</div>
+    <div class="man row">
+      <label>Lado<select onchange="setIn(${a.id},'side',this.value)"><option value="over" ${d.side==='over'?'selected':''}>Más</option><option value="under" ${d.side==='under'?'selected':''}>Menos</option></select></label>
+      <label>Línea<input type="number" step="0.5" value="${d.line}" oninput="setIn(${a.id},'line',this.value)"></label>
+      <label>Cuota<input type="number" step="0.01" value="${d.odd||''}" oninput="setIn(${a.id},'odd',this.value)"></label>
+      <label>Stake<input type="number" step="0.01" value="${d.stake||''}" oninput="setIn(${a.id},'stake',this.value)"></label>
+      <span id="ev${a.id}" style="font-size:.85rem;min-width:140px"></span>
+      <button onclick="addBet(${a.id})">Registrar</button>
+    </div></div>`}).join('')||'<div class="box note">Nada que mostrar.</div>';
+  cache.forEach(a=>updEv(a.id));
+}
+function setIn(id,k,v){inputs[id][k]=v;updEv(id)}
+function calcIn(a){
+  const d=getIn(a),line=parseFloat(d.line),odd=parseFloat(d.odd);
+  if(!isFinite(line)||!(odd>1))return null;
+  const p=pSide(d.side,line,a.T,a.lam);return{p,odd,line,side:d.side,ev:p*odd-1,k:kelly(p,odd)};
+}
+function updEv(id){
+  const a=cache.find(x=>x.id===id),el=$('ev'+id);if(!a||!el)return;
+  const c=calcIn(a);
+  el.innerHTML=c?`P ${(c.p*100).toFixed(0)}% · EV <b class="${c.ev>=S.edge/100?'pos':'neg'}">${(c.ev*100).toFixed(1)}%</b><br>Stake sugerido: ${c.k||'0 (sin valor)'}`:'<span class="note">Pon la cuota de tu casa</span>';
+}
+function addBet(id){
+  const a=cache.find(x=>x.id===id),c=a&&calcIn(a);if(!c){msg('Falta línea o cuota');return}
+  const stake=parseFloat(inputs[id].stake)||c.k;
+  if(!(stake>0)){msg('Sin stake: no hay valor según el modelo. Escribe uno si quieres registrarla igual.');return}
+  bets.push({id:Date.now(),fid:id,match:a.home+' vs '+a.away,m:a.m,T:a.T,side:c.side,line:c.line,odd:c.odd,stake,p:c.p,ev:c.ev,st:'open',pl:0});
+  sv('cr_bets',bets);msg('Apuesta registrada');
+}
+function delBet(id){bets=bets.filter(b=>b.id!==id);sv('cr_bets',bets);renderBets()}
+
+async function settle(){
+  if(!apiKey)return;
+  const ids=[...new Set([...bets.filter(b=>b.st==='open').map(b=>b.fid),...preds.filter(p=>p.res==null).map(p=>p.fid)])];
+  if(!ids.length){msg('Nada pendiente de liquidar');return}
+  msg('Liquidando…');
+  try{
+    for(let i=0;i<ids.length;i+=20){
+      const fx=await apiGet('/fixtures?ids='+ids.slice(i,i+20).join('-'));
+      for(const f of fx){
+        const id=f.fixture.id,st=f.fixture.status.short;let fin;
+        if(st==='FT'){const s=await apiGet('/fixtures/statistics?fixture='+id);if(s.length<2)continue;fin=s.reduce((t,x)=>t+gs(x.statistics,'Corner Kicks'),0)}
+        else if(['AET','PEN','PST','CANC','ABD','AWD','WO'].includes(st))fin=-1;else continue;
+        bets.filter(b=>b.fid===id&&b.st==='open').forEach(b=>{
+          if(fin<0||fin===b.line){b.st='void';b.pl=0;return}
+          const w=b.side==='over'?fin>b.line:fin<b.line;b.st=w?'won':'lost';b.pl=w?b.stake*(b.odd-1):-b.stake;b.fin=fin});
+        preds.filter(p=>p.fid===id&&p.res==null).forEach(p=>{p.res=fin<0?-1:Math.max(0,fin-p.T)});
+      }
+    }
+    sv('cr_bets',bets);sv('cr_preds',preds);renderBets();renderModel();msg('Liquidación completada');
+  }catch(e){msg('Error: '+e.message)}
+}
+function renderBets(){
+  const dn=bets.filter(b=>b.st==='won'||b.st==='lost'),pl=dn.reduce((s,b)=>s+b.pl,0),sk=dn.reduce((s,b)=>s+b.stake,0),w=dn.filter(b=>b.st==='won').length;
+  $('bsum').innerHTML=[['Liquidadas',dn.length],['Acierto',dn.length?(100*w/dn.length).toFixed(0)+'%':'—'],['P/L',pl.toFixed(2)],['ROI',sk?(100*pl/sk).toFixed(1)+'%':'—'],['Bankroll',bank().toFixed(2)],['EV medio previsto',dn.length?(100*dn.reduce((s,b)=>s+b.ev,0)/dn.length).toFixed(1)+'%':'—']].map(([l,n])=>`<div class="st"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  $('btab').innerHTML=bets.slice().reverse().slice(0,50).map(b=>`<tr><td>${esc(b.match)}</td><td>${b.side==='over'?'Más':'Menos'} ${b.line} @${b.odd}</td><td>${b.m}' (${b.T})</td><td>${b.stake}</td><td>${(b.ev*100).toFixed(0)}%</td><td class="${b.st==='open'?'open':b.st==='void'?'':b.pl>=0?'won':'lost'}">${b.st==='open'?'abierta':b.st==='void'?'nula':(b.pl>=0?'+':'')+b.pl.toFixed(2)+' ('+b.fin+')'}</td><td><button class="s" onclick="delBet(${b.id})">✕</button></td></tr>`).join('')||'<tr><td colspan="7">Aún no registras apuestas.</td></tr>';
+}
+function renderModel(){
+  const d=preds.filter(p=>p.res!=null&&p.res>=0),c=calib();
+  let h=`<b>Calibración del modelo</b><div class="note">Predicciones registradas: ${preds.length} · liquidadas: ${d.length}${d.length<30?' — faltan '+(30-d.length)+' para auto-calibrar':''}.</div>`;
+  if(d.length){
+    const mp=d.reduce((s,p)=>s+p.raw,0)/d.length,ma=d.reduce((s,p)=>s+p.res,0)/d.length;
+    h+=`<div class="note">Córners restantes: predichos ${mp.toFixed(2)} · reales ${ma.toFixed(2)} · factor aplicado ×${c.f.toFixed(2)}</div>
+    <div class="scroll"><table><thead><tr><th>Evento</th><th>Prob. predicha</th><th>Frecuencia real</th></tr></thead><tbody>${[1,2,3].map(j=>`<tr><td>≥${j} córner(s) más</td><td>${(100*d.reduce((s,p)=>s+p.p[j-1],0)/d.length).toFixed(0)}%</td><td>${(100*d.filter(p=>p.res>=j).length/d.length).toFixed(0)}%</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  h+=`<div class="note ${bets.filter(b=>b.st==='won'||b.st==='lost').length<100?'warn':''}">Regla de oro: no subas el stake hasta tener 100+ apuestas liquidadas con ROI positivo y predicciones calibradas. Con menos, un buen resultado puede ser suerte.<br>Cada partido se registra como predicción aunque no apuestes: así calibras gratis. Pulsa Liquidar al terminar los partidos.</div>`;
+  $('model').innerHTML=h;
+}
+function exp(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({bets,preds},null,1)],{type:'application/json'}));a.download='corner-radar-datos.json';a.click()}
+$('reqs').textContent=req.d===new Date().toISOString().slice(0,10)?req.n:0;
+renderBets();renderModel();
+</script></body></html>
