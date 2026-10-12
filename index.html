@@ -152,7 +152,7 @@ function analyze(f,sh,sa){
   const a={id,m,T,cH,cA,gh,ga,lam,raw,full,rec,cal,shots,
     home:f.teams.home.name,away:f.teams.away.name,league:f.league.name,offers:[]};
   if(m>=S.minMin&&m<=S.maxMin&&!preds.some(p=>p.fid===id&&Math.abs(p.m-m)<10)){
-    const g=n=>[gs(sh,n),gs(sa,n)];preds.push({fid:id,m,T,raw,lam,p:[1,2,3].map(j=>pAtLeast(j,lam)),res:null,match:a.home+' vs '+a.away,lg:a.league,gd:[gh,ga],x:{c:g('Corner Kicks'),sh:g('Total Shots'),so:g('Shots on Goal'),bl:g('Blocked Shots'),ib:g('Shots insidebox'),sv:g('Goalkeeper Saves'),fo:g('Fouls'),of:g('Offsides'),yc:g('Yellow Cards'),rc:g('Red Cards'),po:g('Ball Possession'),rec:rec,full:full}});
+    const g=n=>[gs(sh,n),gs(sa,n)];preds.push({fid:id,m,T,raw,lam,p:[1,2,3].map(j=>pAtLeast(j,lam)),res:null,match:a.home+' vs '+a.away,t:Date.now(),lg:a.league,gd:[gh,ga],x:{c:g('Corner Kicks'),sh:g('Total Shots'),so:g('Shots on Goal'),bl:g('Blocked Shots'),ib:g('Shots insidebox'),sv:g('Goalkeeper Saves'),fo:g('Fouls'),of:g('Offsides'),yc:g('Yellow Cards'),rc:g('Red Cards'),po:g('Ball Possession'),rec:rec,full:full}});
     if(preds.length>2000)preds.shift();
   }
   return a;
@@ -262,15 +262,16 @@ function delBet(id){bets=bets.filter(b=>b.id!==id);sv('cr_bets',bets);renderBets
 
 async function settle(){
   if(!apiKey)return;
-  const ids=[...new Set([...bets.filter(b=>b.st==='open').map(b=>b.fid),...preds.filter(p=>p.res==null).map(p=>p.fid)])];
-  if(!ids.length){msg('Nada pendiente de liquidar');return}
+  const now=Date.now(),ok=(t,m)=>!t||now-t>(105-m)*6e4;
+  const ids=[...new Set([...bets.filter(b=>b.st==='open'&&ok(b.id,b.m)).map(b=>b.fid),...preds.filter(p=>p.res==null&&ok(p.t,p.m)).map(p=>p.fid)])];
+  if(!ids.length){msg('Nada listo para liquidar: los partidos aún no terminan');return}
   msg('Liquidando…');
   try{
-    for(let i=0;i<ids.length;i+=20){
-      const fx=await apiGet('/fixtures?ids='+ids.slice(i,i+20).join('-'));
+    for(const fid of ids){
+      const fx=await apiGet('/fixtures?id='+fid);
       for(const f of fx){
         const id=f.fixture.id,st=f.fixture.status.short;let fin;
-        if(st==='FT'){const s=await apiGet('/fixtures/statistics?fixture='+id);if(s.length<2)continue;fin=s.reduce((t,x)=>t+gs(x.statistics,'Corner Kicks'),0)}
+        if(st==='FT'){let s=f.statistics;if(!s||s.length<2)s=await apiGet('/fixtures/statistics?fixture='+id);if(s.length<2)continue;fin=s.reduce((t,x)=>t+gs(x.statistics,'Corner Kicks'),0)}
         else if(['AET','PEN','PST','CANC','ABD','AWD','WO'].includes(st))fin=-1;else continue;
         bets.filter(b=>b.fid===id&&b.st==='open').forEach(b=>{
           if(fin<0||fin===b.line){b.st='void';b.pl=0;return}
