@@ -142,14 +142,14 @@ function analyze(f,sh,sa){
   const base=S.avg/93,full=T/Math.max(m,1);
   const old=arr.find(x=>x.m>=m-15&&m-x.m>=6);
   const rec=old?(T-old.c)/(m-old.m):null;
-  const own=rec!=null?.6*full+.4*rec:full;
+  const own=rec!=null?full+.25*Math.min(1,(m-old.m)/15)*(rec-full):full;
   const w=m/(m+30),rate=w*own+(1-w)*base;
   let mult=1+Math.max(-.1,Math.min(.15,.15*(shots/Math.max(m,1)/.27-1)));
   const ad=Math.abs(gh-ga);
   if(m>=60&&ad>=1&&ad<=2)mult*=1.08;else if(ad>=3)mult*=.9;else if(ad===0&&m>=60)mult*=1.03;
   if(m>=75)mult*=1.08;
   const raw=rate*mult*Math.max(0,93-m),cal=calib(),lam=raw*cal.f;
-  const a={id,m,T,cH,cA,gh,ga,lam,raw,full,rec,cal,shots,
+  const a={id,m,mApi:m,lamApi:lam,T,cH,cA,gh,ga,lam,raw,full,rec,cal,shots,
     home:f.teams.home.name,away:f.teams.away.name,league:f.league.name,offers:[]};
   if(m>=S.minMin&&m<=S.maxMin&&!preds.some(p=>p.fid===id&&Math.abs(p.m-m)<10)){
     const g=n=>[gs(sh,n),gs(sa,n)];preds.push({fid:id,m,T,raw,lam,p:[1,2,3].map(j=>pAtLeast(j,lam)),res:null,match:a.home+' vs '+a.away,t:Date.now(),lg:a.league,gd:[gh,ga],x:{c:g('Corner Kicks'),sh:g('Total Shots'),so:g('Shots on Goal'),bl:g('Blocked Shots'),ib:g('Shots insidebox'),sv:g('Goalkeeper Saves'),fo:g('Fouls'),of:g('Offsides'),yc:g('Yellow Cards'),rc:g('Red Cards'),po:g('Ball Possession'),rec:rec,full:full}});
@@ -157,6 +157,7 @@ function analyze(f,sh,sa){
   }
   return a;
 }
+function lamAt(a,m){const w=m/(m+30),rate=w*a.T/Math.max(m,1)+(1-w)*S.avg/93;let mult=1+Math.max(-.1,Math.min(.15,.15*(a.shots/Math.max(m,1)/.27-1)));const ad=Math.abs(a.gh-a.ga);if(m>=60&&ad>=1&&ad<=2)mult*=1.08;else if(ad>=3)mult*=.9;else if(ad===0&&m>=60)mult*=1.03;if(m>=75)mult*=1.08;return rate*mult*Math.max(0,93-m)*a.cal.f}
 function parseOdds(resp){
   const out=[],bk=(resp[0]&&resp[0].odds)||[];
   for(const b of bk){
@@ -218,20 +219,20 @@ function getIn(a){
   if(!d.side)d.side='over';return d;
 }
 function render(){
-  $('matches').innerHTML=cache.map(a=>{
+  $('matches').innerHTML=cache.map(a=>{const dm=+(inputs[a.id]||{}).min;a.m=dm>0?dm:a.mApi;a.lam=dm>0?lamAt(a,a.m):a.lamApi;
     const rows=[1,2,3,4].map(j=>{const p=pAtLeast(j,a.lam),pu=1-p,me=1+S.edge/100;
       return `<tr><td>${a.T+j-.5}</td><td>${(p*100).toFixed(0)}%</td><td>${(1/p).toFixed(2)}</td><td>${(me/p).toFixed(2)}</td><td>${(me/pu).toFixed(2)}</td></tr>`}).join('');
     const b=a.best,val=b&&b.ev>=S.edge/100,sus=b&&b.ev>.25;
     const api=b?`<div style="margin:8px 0"><span class="tag ${sus?'w':''}">${val?'VALOR':'Mejor cuota API'}: ${b.side==='over'?'Más':'Menos'} ${b.line} @${b.odd} · EV ${(b.ev*100).toFixed(1)}%</span>${sus?' <span class="warn">EV muy alto: sospecha de error del modelo o línea desfasada.</span>':''}</div>`:(S.odds?'<div class="note">Sin cuotas de córners en la API para este partido.</div>':'');
     const d=getIn(a);
     return `<div class="mc ${val&&!sus?'val':''}"><h3>${esc(a.home)} vs ${esc(a.away)}</h3>
-    <div class="meta"><b style="color:var(--tx)">${a.gh}-${a.ga}</b><span>${a.m}'</span><span>${esc(a.league)}</span><span>Córners ${a.cH}-${a.cA} (${a.T})</span></div>
+    <div class="meta"><b style="color:var(--tx)">${a.gh}-${a.ga}</b><span>${a.m}'${a.m!==a.mApi?` (API ${a.mApi}')`:''}</span><span>${esc(a.league)}</span><span>Córners ${a.cH}-${a.cA} (${a.T})</span></div>
     <div class="meta"><span>Esperados restantes: <b style="color:var(--tx)">${a.lam.toFixed(2)}</b></span><span>Ritmo: ${(a.full*90).toFixed(1)}/90'</span><span>Reciente: ${a.rec!=null?(a.rec*90).toFixed(1)+'/90\'':'—'}</span><span>Calibración ×${a.cal.f.toFixed(2)}</span></div>
     ${api}
     <div class="scroll"><table><thead><tr><th>Línea Más de</th><th>P(Más)</th><th>Cuota justa</th><th>Mín. Más</th><th>Mín. Menos</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="note">Apuesta solo si tu casa paga igual o más que la cuota mínima.</div>
+    <div class="note">Apuesta solo si tu casa paga igual o más que la cuota mínima. Si el minuto de tu casa difiere del de la API, ponlo en Min. casa.</div>
     <div class="man row">
-      <label>Lado<select onchange="setIn(${a.id},'side',this.value)"><option value="over" ${d.side==='over'?'selected':''}>Más</option><option value="under" ${d.side==='under'?'selected':''}>Menos</option></select></label>
+      <label>Min. casa<input type="number" placeholder="${a.mApi}" value="${d.min||''}" onchange="setMin(${a.id},this.value)"></label><label>Lado<select onchange="setIn(${a.id},'side',this.value)"><option value="over" ${d.side==='over'?'selected':''}>Más</option><option value="under" ${d.side==='under'?'selected':''}>Menos</option></select></label>
       <label>Línea<input type="number" step="0.5" value="${d.line}" oninput="setIn(${a.id},'line',this.value)"></label>
       <label>Cuota<input type="number" step="0.01" value="${d.odd||''}" oninput="setIn(${a.id},'odd',this.value)"></label>
       <label>Stake<input type="number" step="0.01" value="${d.stake||''}" oninput="setIn(${a.id},'stake',this.value)"></label>
@@ -241,6 +242,7 @@ function render(){
   cache.forEach(a=>updEv(a.id));
 }
 function setIn(id,k,v){inputs[id][k]=v;updEv(id)}
+function setMin(id,v){inputs[id].min=v;render()}
 function calcIn(a){
   const d=getIn(a),line=parseFloat(d.line),odd=parseFloat(d.odd);
   if(!isFinite(line)||!(odd>1))return null;
